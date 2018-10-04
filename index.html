@@ -1,0 +1,380 @@
+<!doctypehtml>
+<html>
+	<head>
+		<title>Checkpoints</title>
+	</head>
+
+	<body style="background: #FFFFFF;">
+
+		<input id="button" type="button" value="Start" />
+
+		<table>
+			<tr>
+				<td>
+					<div id="genNum">GEN: 0</div>
+				</td>
+				<td> | </td>
+				<td>
+					<div id="numDots">NUM DOTS: 0</div>
+				</td>
+				<td> | </td>
+				<td>
+					<div id="bestFitness">BEST FITNESS: 0</div>
+				</td>
+				<td> | </td>
+				<td>
+					<div id="steps">NUM STEPS: 0</div>
+				</td>
+				<td> | </td>
+				<td>
+					<input type="checkbox" name="draw" value="draw" id="draw" checked> draw dots?
+				</td>
+			</tr>
+		</table>
+
+		<canvas id="myCanvas" style="top = 0; left = 0; background: #000000;"></canvas>
+
+	</body>
+
+	<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+
+	<script>
+
+$(document).ready(function(){
+	$('#button').click(function(){
+		begin();
+	});
+});
+
+var canvas = document.getElementById("myCanvas");
+var ctx = canvas.getContext("2d");
+var xa = window.innerWidth/2;
+var ya = window.innerHeight/2;
+canvas.width = window.innerWidth-50;
+canvas.height = window.innerHeight-70;
+var width = canvas.width;
+var height = canvas.height;
+
+var running = false;
+
+var DF;
+
+var STEPS = 3500;
+var SWITCHING_DIS = 50;
+
+var POP = 500;
+var GEN_MAX = 75;
+
+var CHAR_R = 7.5;
+var CP_R = 15;
+
+var CHECKPOINTS = [[width / 5, height / 3], [width - width / 5, height / 3], [width / 2, height - height / 4]];
+
+function begin() {
+	console.log("begin")
+	running = true;
+}
+
+class Dot {
+	constructor(x, y, path) {
+		if (typeof path !== "undefined") {
+			this.path = path;
+		} else {
+			this.path = this.genRandPath();
+		}
+		
+
+		this.x = x;
+		this.y = y;
+
+		this.cpReached = 0;
+		this.cpStepsTaken = [];
+
+		this.closestDis = width + height;
+
+		this.steps = 0;
+		this.reachedGoal = false;
+		this.dead = false;
+		this.isBest = false;
+		this.hitEdge = false;
+	}
+
+	genRandPath() {
+		var newPath = [];
+		for (var i = 0; i < STEPS; i++) {
+			newPath.push([4 * Math.random() - 2, 4 * Math.random() - 2]);
+		}
+		return newPath;
+	}
+
+	move() {
+		if (!this.reachedGoal && !this.dead) {
+			//console.log(Math.floor(this.steps / 10) + " -- " + this.path[Math.floor(this.steps / 10)]);
+
+			this.x += this.path[Math.floor(this.steps / SWITCHING_DIS)][0];
+			this.y += this.path[Math.floor(this.steps / SWITCHING_DIS)][1];
+			this.steps++;
+
+			var dis = ((CHECKPOINTS[this.cpReached][0] - this.x)**2 + (CHECKPOINTS[this.cpReached][1] - this.y)**2)**.5;
+
+			if (dis < this.closestDis) {
+				this.closestDis = dis;
+			}
+
+			if (dis < CHAR_R + CP_R) {
+				var steps = this.steps;
+				for (var i = 0; i < this.cpStepsTaken.length; i++) {
+					steps -= this.cpStepsTaken[i];
+				}
+				this.cpStepsTaken.push(steps);
+				this.cpReached++;
+				this.closestDis = width + height;
+
+				if (this.cpReached >= CHECKPOINTS.length) {
+					this.reachedGoal = true;
+				}
+			}
+
+			// if (this.steps > STEPS || this.x < 0 || this.x > width || this.y < 0 || this.y > height) {
+			// 	this.dead = true;
+			// 	this.hitEdge - true;
+			// }
+		}
+	}
+
+	draw() {
+		if (this.isBest) {
+			ctx.beginPath();
+			ctx.fillStyle = "#33D7FF";
+			ctx.arc(this.x, this.y, CHAR_R + 2.5, 0, 2 * Math.PI);
+			ctx.fill();
+			ctx.closePath();
+		} else {
+			ctx.beginPath();
+			ctx.fillStyle = "#FF5733";
+			ctx.arc(this.x, this.y, CHAR_R, 0, 2 * Math.PI);
+			ctx.fill();
+			ctx.closePath();
+		}
+	}
+
+	calcFitness() {
+		if (this.reachedGoal) {
+			return (200000 * CHECKPOINTS.length) / this.steps;
+		}
+
+		//return ((250 * this.cpReached) + (400 / this.closestDis)) / this.steps;
+
+		var f = 0;
+
+		for (var i = 0; i < this.cpReached; i++) {
+			f += 300 / (this.cpStepsTaken[i] / 20);
+		}
+
+		f += (200 / this.closestDis / 70);
+
+		f += (100 / (((CHECKPOINTS[this.cpReached][0] - this.x)**2 + (CHECKPOINTS[this.cpReached][1] - this.y)**2)**.5 / 5));
+
+		if (this.hitEdge) {
+			f /= 4;
+		}
+
+		return f;
+	}
+
+	clone(x, y) {
+		return new Dot(x, y, this.path.slice());
+	}
+
+	mutate(rate) {
+		if (this.isBest) {
+			return;
+		}
+		for (var i = 0; i < this.path.length; i++) {
+			if (Math.random() < rate) {
+				this.path[i] = [4 * Math.random() - 2, 4 * Math.random() - 2];
+			}
+		}
+	}
+}
+
+class DotFactory {
+	constructor(ix, iy, pop, checkpoints) {
+		this.ix = ix;
+		this.iy = iy;
+		this.pop = pop;
+		this.checkpoints = checkpoints;
+
+		this.dots = [];
+		for (var i = 0; i < pop; i++) {
+			this.dots.push(new Dot(ix, iy));
+		}
+
+		this.maxStep = STEPS;
+		this.fitnessSum = 0;
+		this.bestDot = 0;
+		this.gen = 0;
+		this.bestFitness = -1;
+	}
+
+	draw() {
+		for (var i = 0; i < this.dots.length; i++) {
+			this.dots[i].draw();
+		}
+	}
+
+	update() {
+		for (var i = 0; i < this.dots.length; i++) {
+			if (this.dots[i].steps > this.maxStep + 300) {
+				this.dots[i].dead = true;
+			} else {
+				this.dots[i].move();
+			}
+		}
+	}
+
+	calcFitness() {
+		this.fitnessSum = 0;
+		for (var i = 0; i < this.dots.length; i++) {
+			this.fitnessSum += this.dots[i].calcFitness();
+		}
+	}
+
+	allDotsDead() {
+		for (var i = 0; i < this.dots.length; i++) {
+			if (!this.dots[i].dead && !this.dots[i].reachedGoal) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	naturalSelection() {
+		var newDots = [];
+		this.setBestDot();
+		this.calcFitness();
+
+		newDots.push(this.dots[this.bestDot].clone(this.ix, this.iy));
+		newDots[0].isBest = true;
+
+		for (var i = 1; i < this.pop; i++) {
+			newDots.push(this.selectParent().clone(this.ix, this.iy));
+		}
+
+		this.dots = newDots;
+		this.gen++;
+	}
+
+	setBestDot() {
+		var m = -1;
+		var mi = -1;
+
+		for (var i = 0; i < this.dots.length; i++) {
+			if (this.dots[i].calcFitness() > m) {
+				m = this.dots[i].calcFitness();
+				this.bestFitness = m;
+				mi = i;
+			}
+		}
+
+		this.bestDot = mi;
+
+		if (this.dots[this.bestDot].reachedGoal) {
+			this.maxStep = this.dots[this.bestDot].steps;
+		}
+	}
+
+	selectParent() {
+		var thresh = Math.random() * this.fitnessSum;
+		var s = 0;
+
+		for (var i = 0; i < this.dots.length; i++) {
+			s += this.dots[i].calcFitness();
+			if (s >= thresh) {
+				return this.dots[i];
+			}
+		}
+
+		// Shouldn't get here
+		return null;
+	}
+
+	mutate(rate) {
+		for (var i = 0; i < this.dots.length; i++) {
+			this.dots[i].mutate(rate);
+		}
+	}
+
+	restartGen() {
+		for (var i = 0; i < this.dots.length; i++) {
+			this.dots[i].steps = 0;
+			this.dots[i].x = this.xi;
+			this.dots[i].y = this.yi;
+			this.dots[i].cpStepsTaken = [];
+			this.dots[i].closestDis = width + height;
+			this.dots[i].steps = 0;
+			this.dots[i].reachedGoal = false;
+			this.dots[i].dead = false;
+			this.dots[i].isBest = false;
+			this.dots[i].hitEdge = false;
+		}
+	}
+}
+
+function drawCheckpoints() {
+	for (var i = 0; i < CHECKPOINTS.length; i++) {
+		ctx.beginPath();
+		ctx.fillStyle = "#4AFF33";
+		ctx.arc(CHECKPOINTS[i][0], CHECKPOINTS[i][1], CP_R, 0, 2 * Math.PI);
+		ctx.fill();
+		ctx.closePath();
+	}
+}
+
+function update() {
+	if (!running) {
+		return;
+	}
+
+	if (canvas.width != window.innerWidth - 50 || canvas.height != window.innerHeight - 70) {
+		canvas.width = window.innerWidth - 50;
+		canvas.height = window.innerHeight - 70;
+		width = canvas.width;
+		height = canvas.height;
+	}
+	if (document.getElementById("draw").checked) {
+		ctx.clearRect(0, 0, width, height);
+	}
+
+	drawCheckpoints();
+	
+	if (DF === undefined) {
+		DF = new DotFactory(width / 2, height - height / 5, POP, CHECKPOINTS);
+	}
+
+	$('#genNum').text("GEN: " + DF.gen);
+	$('#numDots').text("NUM DOTS: " + DF.dots.length);
+	$('#bestFitness').text("BEST FITNESS: " + DF.bestFitness);
+	$('#steps').text("NUM STEPS: " + STEPS);
+
+	if (DF.gen >= GEN_MAX && DF.allDotsDead()) {
+		DF.restartGen();
+	}
+
+	if (DF.gen < GEN_MAX && DF.allDotsDead()) {
+		DF.naturalSelection();
+		DF.mutate(0.035);
+	}
+
+	DF.update();
+
+	if (document.getElementById("draw").checked) {
+		DF.draw();
+	}
+}
+
+var interval = setInterval(update, 1);
+
+</script>
+
+</html>
