@@ -65,8 +65,8 @@ var SWITCHING_DIS = 50;
 var POP = 500;
 var GEN_MAX = 75;
 
-var CHAR_R = 7.5;
-var CP_R = 15;
+var CHAR_R = width / 180;
+var CP_R = width / 80;
 
 var CHECKPOINTS = [[width / 5, height / 3], [width - width / 5, height / 3], [width / 2, height - height / 4]];
 
@@ -168,7 +168,7 @@ class Dot {
 		var f = 0;
 
 		for (var i = 0; i < this.cpReached; i++) {
-			f += 300 / (this.cpStepsTaken[i] / 20);
+			f += 400 / (this.cpStepsTaken[i] / 20);
 		}
 
 		f += (200 / this.closestDis / 70);
@@ -215,6 +215,7 @@ class DotFactory {
 		this.bestDot = 0;
 		this.gen = 0;
 		this.bestFitness = -1;
+		this.prevFitness = -1;
 	}
 
 	draw() {
@@ -262,7 +263,21 @@ class DotFactory {
 		}
 
 		this.dots = newDots;
+		this.incrGen();
+	}
+
+	incrGen() {
 		this.gen++;
+		$('#genNum').text("GEN: " + DF.gen);
+		$('#numDots').text("NUM DOTS: " + DF.dots.length);
+		$('#bestFitness').text("BEST FITNESS: " + DF.bestFitness);
+		$('#steps').text("NUM STEPS: " + STEPS);
+		if (this.bestFitness > this.prevFitness) {
+			document.getElementById("bestFitness").style.color = "#0CCB0C";
+		} else {
+			document.getElementById("bestFitness").style.color = "#0CA2CB";
+		}
+		this.prevFitness = this.bestFitness;
 	}
 
 	setBestDot() {
@@ -344,18 +359,13 @@ function update() {
 	}
 	if (document.getElementById("draw").checked) {
 		ctx.clearRect(0, 0, width, height);
-	}
 
-	drawCheckpoints();
+		drawCheckpoints();
+	}
 	
 	if (DF === undefined) {
 		DF = new DotFactory(width / 2, height - height / 5, POP, CHECKPOINTS);
 	}
-
-	$('#genNum').text("GEN: " + DF.gen);
-	$('#numDots').text("NUM DOTS: " + DF.dots.length);
-	$('#bestFitness').text("BEST FITNESS: " + DF.bestFitness);
-	$('#steps').text("NUM STEPS: " + STEPS);
 
 	if (DF.gen >= GEN_MAX && DF.allDotsDead()) {
 		DF.restartGen();
