@@ -71,7 +71,6 @@ var CP_R = width / 80;
 var CHECKPOINTS = [[width / 5, height / 3], [width - width / 5, height / 3], [width / 2, height - height / 4]];
 
 function begin() {
-	console.log("begin")
 	running = true;
 }
 
@@ -319,21 +318,6 @@ class DotFactory {
 			this.dots[i].mutate(rate);
 		}
 	}
-
-	restartGen() {
-		for (var i = 0; i < this.dots.length; i++) {
-			this.dots[i].steps = 0;
-			this.dots[i].x = this.xi;
-			this.dots[i].y = this.yi;
-			this.dots[i].cpStepsTaken = [];
-			this.dots[i].closestDis = width + height;
-			this.dots[i].steps = 0;
-			this.dots[i].reachedGoal = false;
-			this.dots[i].dead = false;
-			this.dots[i].isBest = false;
-			this.dots[i].hitEdge = false;
-		}
-	}
 }
 
 function drawCheckpoints() {
@@ -365,10 +349,6 @@ function update() {
 	
 	if (DF === undefined) {
 		DF = new DotFactory(width / 2, height - height / 5, POP, CHECKPOINTS);
-	}
-
-	if (DF.gen >= GEN_MAX && DF.allDotsDead()) {
-		DF.restartGen();
 	}
 
 	if (DF.gen < GEN_MAX && DF.allDotsDead()) {
